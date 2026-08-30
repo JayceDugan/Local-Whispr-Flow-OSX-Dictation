@@ -4,6 +4,13 @@ A menu-bar dictation app for macOS: press a global hotkey anywhere, speak, press
 
 This repo is the **macOS client**. It pairs with my self-hosted ASR service running on my home AI lab dev box — [Devbox-AI-Lab](https://github.com/JayceDugan/Devbox-AI-Lab) — which runs a local Whisper-class model behind a small HTTP API.
 
+
+## At a Glance
+
+| The panel — one big button, live status | Dictating — timer + HUD pill at the bottom of the screen | Done — transcript pasted at your cursor, latency badge in the panel |
+|---|---|---|
+| <img src="docs/assets/initial_screenshot.png" width="260" alt="Panel with record button"> | <img src="docs/assets/recording_in_progress.png" width="260" alt="Recording in progress with HUD pill"> | <img src="docs/assets/successful_transcription.png" width="260" alt="Transcript pasted at cursor"> |
+
 ## Why This Project Exists
 
 I ran out of weekly word usage on Whispr Flow — a $16/month service I barely use beyond a few hundred words a week. Paying that for convenience I could own myself didn't sit right, so I built the whole pipeline: an ASR server on my home GPU box, and this native client that makes it feel like a system feature.
