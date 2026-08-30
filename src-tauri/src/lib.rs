@@ -12,7 +12,7 @@ mod tray;
 use std::time::Duration;
 
 use tauri::menu::MenuEvent;
-use tauri::tray::TrayIconEvent;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -265,7 +265,14 @@ pub fn run() {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { .. } = event {
+            // macOS fires Click for both Down and Up; toggling on each makes
+            // the panel flash (show then instantly hide). Act once, on release.
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
                 let app = tray.app_handle();
                 if let Some(win) = app.get_webview_window(PANEL_LABEL) {
                     if win.is_visible().unwrap_or(false) {
