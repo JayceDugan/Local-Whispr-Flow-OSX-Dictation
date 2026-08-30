@@ -30,7 +30,7 @@ The result: zero marginal cost, no internet dependency, full ownership of my aud
 This app was built almost entirely through **agentic coding**:
 
 - **Model:** Qwen 3.8 Flash Next (Q8), running locally via Unsloth Desktop on the dev box — 180k context, which is what made it viable to hand a single agent the whole codebase plus vendored crate sources and keep coherent across a multi-day build.
-- **Harness:** [Oh My Pi (OMP)](https://github.com/can1357/oh-my-pi) as the agent harness — driven with its **goal command** so the agent owned an end-to-end objective ("hotkey → capture → upload → inject, tray shows every phase") and iterated against real evidence until each acceptance criterion passed.
+- **Harness:** [Oh My Pi (OMP)](https://omp.sh/) as the agent harness — driven with its **goal command** so the agent owned an end-to-end objective ("hotkey → capture → upload → inject, tray shows every phase") and iterated against real evidence until each acceptance criterion passed.
 - **Safety layer:** OMPy for type-checking and code-safety passes across the TypeScript side.
 - **Method that mattered:** the agent verified the live API contract against the running server before writing any client code, vendored crate sources to check signatures instead of guessing, reproduced every bug (tray icon vanishing, double-fire on click, streams recording silence) with a failing observation first, and committed at each verified milestone.
 
