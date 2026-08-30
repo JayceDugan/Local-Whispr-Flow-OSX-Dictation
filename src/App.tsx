@@ -1,51 +1,79 @@
+import { Mic, Settings, X } from "lucide-react";
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { RecordingIndicator } from "@/components/RecordingIndicator";
+import { SettingsPanel } from "@/components/SettingsPanel";
+import { StatusBanner } from "@/components/StatusBanner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { AsrProvider, useAsrClient } from "@/hooks/useAsrClient";
+import { cn } from "@/lib/utils";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type Tab = "dictate" | "settings";
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
+function Header({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
+  const { status, closePanel } = useAsrClient();
+  const online = status?.health === "online";
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <header className="flex items-center justify-between px-4 pt-4 pb-2">
+      <div className="flex items-center gap-2">
+        <Mic className="size-4" />
+        <h1 className="text-sm font-semibold">ASR Dictation</h1>
+        <Badge variant={online ? "secondary" : "destructive"}>
+          {online ? "online" : "offline"}
+        </Badge>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      <div className="flex items-center gap-1">
+        <Button
+          variant={tab === "dictate" ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => onTab("dictate")}
+        >
+          Dictate
+        </Button>
+        <Button
+          variant={tab === "settings" ? "secondary" : "ghost"}
+          size="sm"
+          aria-label="Settings"
+          onClick={() => onTab("settings")}
+        >
+          <Settings />
+        </Button>
+        <Button variant="ghost" size="sm" aria-label="Close" onClick={closePanel}>
+          <X />
+        </Button>
+      </div>
+    </header>
   );
 }
 
-export default App;
+function Panel() {
+  const [tab, setTab] = useState<Tab>("dictate");
+  return (
+    <div className="flex h-full flex-col">
+      <Header tab={tab} onTab={setTab} />
+      <main
+        className={cn(
+          "flex-1 overflow-y-auto px-4 pb-4",
+          tab === "dictate" && "flex flex-col justify-center gap-6",
+        )}
+      >
+        {tab === "dictate" ? (
+          <>
+            <RecordingIndicator />
+            <StatusBanner />
+          </>
+        ) : (
+          <SettingsPanel />
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AsrProvider>
+      <Panel />
+    </AsrProvider>
+  );
+}

@@ -1,10 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "opener:default"
-  ]
+  "description": "Capability for the panel window (all privileged work happens in Rust)",
+  "windows": ["panel"],
+  "permissions": ["core:default"]
 }
