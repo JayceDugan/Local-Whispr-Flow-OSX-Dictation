@@ -8,7 +8,7 @@ use core_graphics::color_space::CGColorSpace;
 use core_graphics::context::CGContext;
 use core_graphics::geometry::{CGRect, CGPoint, CGSize};
 use tauri::image::Image;
-use tauri::menu::{Menu, MenuBuilder, MenuItem};
+use tauri::menu::{Menu, MenuBuilder, MenuItem, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager};
 
@@ -21,6 +21,11 @@ pub const ID_TOGGLE: &str = "toggle-record";
 pub const ID_PANEL: &str = "open-panel";
 pub const ID_QUIT: &str = "quit";
 
+/// Held as managed state so the toggle label can be updated without an
+/// id lookup (muda's Manager has no menu_item_by_id).
+pub struct TrayMenu {
+    pub toggle: MenuItem<tauri::Wry>,
+}
 impl PhaseWire {
     pub fn tooltip(self) -> &'static str {
         match self {
@@ -111,22 +116,24 @@ fn copy_flipped_rgba(data: &[u8]) -> Vec<u8> {
     out
 }
 
+/// NSStatusItem mutations must happen on the main thread; flow calls these
+/// from tokio workers, so hop explicitly. Off-main set_icon silently removes
+/// the status item (observed: tray vanishes after the first cycle).
 pub fn set_phase(app: &AppHandle, phase: PhaseWire) {
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_icon(Some(icon_for(phase)));
-        let _ = tray.set_tooltip(Some(phase.tooltip()));
-    }
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(tray) = handle.tray_by_id(TRAY_ID) {
+            let _ = tray.set_icon(Some(icon_for(phase)));
+            let _ = tray.set_tooltip(Some(phase.tooltip()));
+        }
+    });
 }
 
-/// Held in managed state so the record/stop label can be updated on phase changes.
-pub struct TrayMenu {
-    pub toggle: MenuItem<tauri::Wry>,
-}
-
+/// Create the status item and its right-click menu. Call from setup (main thread).
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
-    let toggle = MenuItem::with_id(app, ID_TOGGLE, "Start Recording", true, None::<&str>)?;
-    let panel = MenuItem::with_id(app, ID_PANEL, "Open Panel", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, ID_QUIT, "Quit", true, None::<&str>)?;
+    let toggle = MenuItemBuilder::with_id(ID_TOGGLE, "Start Recording").build(app)?;
+    let panel = MenuItemBuilder::with_id(ID_PANEL, "Open Panel").build(app)?;
+    let quit = MenuItemBuilder::with_id(ID_QUIT, "Quit ASR").build(app)?;
 
     let menu: Menu<tauri::Wry> = MenuBuilder::new(app)
         .item(&toggle)
@@ -150,11 +157,14 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 
 /// Keep the "Start/Stop Recording" menu label in sync with phase.
 pub fn sync_toggle_label(app: &AppHandle, recording: bool) {
-    if let Some(menu) = app.try_state::<TrayMenu>() {
-        let _ = menu.toggle.set_text(if recording {
-            "Stop Recording"
-        } else {
-            "Start Recording"
-        });
-    }
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(menu) = handle.try_state::<TrayMenu>() {
+            let _ = menu.toggle.set_text(if recording {
+                "Stop Recording"
+            } else {
+                "Start Recording"
+            });
+        }
+    });
 }

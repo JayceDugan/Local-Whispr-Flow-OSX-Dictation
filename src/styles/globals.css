@@ -83,4 +83,10 @@
   body {
     @apply bg-background text-foreground font-sans antialiased select-none;
   }
+  /* The floating HUD window must be transparent outside its pill. */
+  html[data-window="hud"],
+  html[data-window="hud"] body,
+  html[data-window="hud"] #root {
+    background: transparent;
+  }
 }

@@ -165,6 +165,7 @@ pub fn start_recording(app: &AppHandle) -> Result<StartInfo, ClientError> {
     let (recorder, info) = Recorder::start()?;
     *session.recorder.lock() = Some(recorder);
     set_phase(app, PhaseWire::Recording);
+    crate::hud::notify(app, crate::hud::HudState::Listening);
     spawn_cap_watchdog(app.clone());
     Ok(info)
 }
@@ -197,6 +198,7 @@ pub fn stop_and_transcribe(app: &AppHandle) {
     let Some(recorder) = recorder else { return };
 
     set_phase(app, PhaseWire::Processing);
+    crate::hud::notify(app, crate::hud::HudState::Transcribing);
     let app2 = app.clone();
     tauri::async_runtime::spawn(async move {
         match run_cycle(app2.clone(), recorder).await {
@@ -220,9 +222,9 @@ fn on_success(app: &AppHandle, outcome: crate::asr::TranscribeOutcome) {
     let t = outcome.transcription.clone();
     // Injection blocks ~60 ms (pasteboard settle). Its failure must not lose
     // the transcript — the result is recorded either way.
-    let injected = inject::inject_text(&t.text);
-    if let Err(e) = &injected {
-        eprintln!("[asr] injection failed: {e}");
+    let injected_msg = inject::inject_text(&t.text).err().map(|e| e.to_string());
+    if let Some(m) = &injected_msg {
+        eprintln!("[asr] injection failed: {m}");
     }
     app.state::<Session>().with_status(|s| {
         s.last_result = Some(LastResult {
@@ -233,24 +235,31 @@ fn on_success(app: &AppHandle, outcome: crate::asr::TranscribeOutcome) {
             latency_ms: outcome.latency_ms,
             slow: outcome.slow,
         });
-        match injected {
-            Ok(()) => {
+        match &injected_msg {
+            None => {
                 s.phase = PhaseWire::Idle;
                 s.error = None;
             }
-            Err(e) => {
+            Some(m) => {
                 s.phase = PhaseWire::Error;
                 s.error = Some(ErrorWire {
                     kind: ErrorKind::Audio,
-                    message: format!("transcribed, but paste injection failed: {e}"),
+                    message: format!("transcribed, but paste injection failed: {m}"),
                 });
             }
         }
     });
+    crate::hud::notify(
+        app,
+        if injected_msg.is_none() {
+            crate::hud::HudState::Done
+        } else {
+            crate::hud::HudState::Failed
+        },
+    );
     apply_phase_visuals(app, app.state::<Session>().snapshot().phase);
     emit_status(app);
 }
-
 fn on_failure(app: &AppHandle, e: ClientError) {
     let kind = e.kind();
     app.state::<Session>().with_status(|s| {
@@ -260,6 +269,7 @@ fn on_failure(app: &AppHandle, e: ClientError) {
             message: e.to_string(),
         });
     });
+    crate::hud::notify(app, crate::hud::HudState::Failed);
     apply_phase_visuals(app, PhaseWire::Error);
     emit_status(app);
 }

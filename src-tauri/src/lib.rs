@@ -3,6 +3,7 @@ mod audio;
 mod config;
 mod error;
 mod flow;
+mod hud;
 mod inject;
 mod keychain;
 mod state;
@@ -215,8 +216,10 @@ pub fn run() {
                 .unwrap_or_else(|_| std::path::PathBuf::from("asr-config.json"));
             app.manage(ConfigHolder::new(config_path));
             app.manage(flow::Session::default());
+            app.manage(hud::Hud::new());
 
             tray::build_tray(&handle)?;
+            hud::build_hud(&handle)?;
 
             // Menu-bar app: no Dock icon, panel window created hidden.
             #[cfg(target_os = "macos")]

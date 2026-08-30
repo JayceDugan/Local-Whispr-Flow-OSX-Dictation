@@ -1,5 +1,7 @@
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Mic, Settings, X } from "lucide-react";
 import { useState } from "react";
+import { Hud } from "@/components/Hud";
 import { RecordingIndicator } from "@/components/RecordingIndicator";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { StatusBanner } from "@/components/StatusBanner";
@@ -71,6 +73,15 @@ function Panel() {
 }
 
 export default function App() {
+  // One bundle, two windows: the tray panel and the floating HUD.
+  let label = "panel";
+  try {
+    label = getCurrentWindow().label;
+  } catch {
+    /* plain browser preview — panel layout */
+  }
+  document.documentElement.dataset.window = label;
+  if (label === "hud") return <Hud />;
   return (
     <AsrProvider>
       <Panel />
