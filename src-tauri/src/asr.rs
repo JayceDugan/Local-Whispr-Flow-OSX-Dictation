@@ -104,13 +104,18 @@ async fn attempt(
     cleanup: bool,
 ) -> Result<Transcription, ClientError> {
     let url = format!("{}/v1/transcribe", base_url.trim_end_matches('/'));
+
     let part = multipart::Part::bytes(wav.to_vec())
         .file_name("recording.wav")
         .mime_str("audio/wav")
         .map_err(|e| ClientError::audio(e.to_string()))?;
+
     let mut form = multipart::Form::new().part("file", part);
+
     if cleanup {
         form = form.text("cleanup", "true".to_string());
+    } else {
+        form = form.text("cleanup", "false".to_string());
     }
 
     let client = reqwest::Client::new();
