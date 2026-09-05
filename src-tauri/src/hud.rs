@@ -112,13 +112,17 @@ pub fn notify(app: &AppHandle, state: HudState) {
     let _ = app.emit("asr://hud", state);
     set_visible(app, true);
 
+    // Every notify claims visibility; bumping the generation here (before the
+    // Listening/Transcribing early-return) invalidates any pending auto-hide
+    // timer from a previous Done/Failed, so it can't fire into the next cycle.
+    let gen = app.state::<Hud>().generation.fetch_add(1, Ordering::SeqCst) + 1;
+
     let hide_after = match state {
         HudState::Listening | HudState::Transcribing => return,
         HudState::Done => std::time::Duration::from_millis(1800),
         HudState::Failed => std::time::Duration::from_millis(2600),
     };
 
-    let gen = app.state::<Hud>().generation.fetch_add(1, Ordering::SeqCst) + 1;
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(hide_after).await;

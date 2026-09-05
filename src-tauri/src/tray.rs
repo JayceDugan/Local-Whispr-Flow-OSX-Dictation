@@ -5,7 +5,7 @@
 //! borrowed from `flow` — one vocabulary, no parallel enum.
 use core_graphics::base::{kCGImageAlphaPremultipliedLast, kCGBitmapByteOrder32Big};
 use core_graphics::color_space::CGColorSpace;
-use core_graphics::context::CGContext;
+use core_graphics::context::{CGContext, CGLineCap, CGLineJoin};
 use core_graphics::geometry::{CGRect, CGPoint, CGSize};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuBuilder, MenuItem, MenuItemBuilder};
@@ -53,28 +53,28 @@ pub fn icon_for(phase: PhaseWire) -> Image<'static> {
     );
 
     ctx.set_gray_fill_color(0.0, 1.0); // pure black; macOS tints templates
+    ctx.set_rgb_stroke_color(0.0, 0.0, 0.0, 1.0); // no gray stroke variant exists
+    ctx.set_line_cap(CGLineCap::CGLineCapRound);
+    ctx.set_line_join(CGLineJoin::CGLineJoinRound);
     let c = SIZE as f64 / 2.0;
 
     match phase {
         PhaseWire::Idle => {
-            // Hollow ring: ready.
-            ring(&mut ctx, c, c, 13.0, 2.5);
+            // Microphone: the hero glyph (no surrounding circle).
+            mic(&mut ctx, false);
         }
         PhaseWire::Recording => {
-            // Filled dot inside a thin ring: live capture.
-            ring(&mut ctx, c, c, 14.0, 2.0);
-            disc(&mut ctx, c, c, 7.5);
+            // Same microphone plus radiating sound-wave arcs: live capture.
+            mic(&mut ctx, true);
         }
         PhaseWire::Processing => {
             // Tick ring: spinner-ish (static frame).
             tick_ring(&mut ctx, c, c, 13.0, 8, 2.0);
         }
         PhaseWire::Error => {
-            ring(&mut ctx, c, c, 13.0, 2.5);
-            // Exclamation: stem + dot (CG origin is bottom-left).
-            let stem = CGRect::new(&CGPoint::new(c - 1.4, 8.0), &CGSize::new(2.8, 11.5));
-            ctx.fill_rect(stem);
-            disc(&mut ctx, c, c - 9.0, 1.9);
+            // Bold exclamation mark alone (CG origin is bottom-left).
+            capsule(&mut ctx, 18.0, 14.0, 18.0, 25.0, 3.5);
+            disc(&mut ctx, 18.0, 9.0, 2.0);
         }
         PhaseWire::ServerStarting => {
             // Sparse tick ring + center dot: waiting on the stack.
@@ -83,15 +83,49 @@ pub fn icon_for(phase: PhaseWire) -> Image<'static> {
         }
     }
 
-    let rgba = copy_flipped_rgba(ctx.data());
+    let rgba = copy_rgba(ctx.data());
     Image::new_owned(rgba, SIZE as u32, SIZE as u32)
 }
 
-/// Stroked circle — CGContextStrokeEllipseInRect honors the current line width.
-fn ring(ctx: &mut CGContext, x: f64, y: f64, r: f64, line_width: f64) {
-    ctx.set_line_width(line_width);
-    let rect = CGRect::new(&CGPoint::new(x - r, y - r), &CGSize::new(r * 2.0, r * 2.0));
-    ctx.stroke_ellipse_in_rect(rect);
+/// Microphone motif: capsule body, cradle "U", stem, base bar; `waves` adds
+/// radiating sound-wave arcs on both sides (recording). CG origin is bottom-left.
+fn mic(ctx: &mut CGContext, waves: bool) {
+    // Capsule body: thick round-capped stroke rising out of the cradle.
+    capsule(ctx, 18.0, 20.0, 18.0, 28.0, 6.0);
+
+    // Cradle "U": open at the top, wraps the lower capsule; collinear quad
+    // tangents at (18,14) keep the bottom smooth.
+    ctx.set_line_width(2.0);
+    ctx.begin_path();
+    ctx.move_to_point(11.0, 24.0);
+    ctx.add_quad_curve_to_point(11.0, 14.0, 18.0, 14.0);
+    ctx.add_quad_curve_to_point(25.0, 14.0, 25.0, 24.0);
+    ctx.stroke_path();
+
+    // Stem down to the base bar, then the bar itself.
+    capsule(ctx, 18.0, 9.0, 18.0, 14.0, 2.0);
+    capsule(ctx, 14.0, 9.0, 22.0, 9.0, 2.0);
+
+    if waves {
+        // Sound-wave arcs flanking the mic (quad-curve arc approximations).
+        ctx.begin_path();
+        ctx.move_to_point(7.0, 15.0);
+        ctx.add_quad_curve_to_point(4.0, 19.0, 7.0, 23.0);
+        ctx.stroke_path();
+        ctx.begin_path();
+        ctx.move_to_point(29.0, 15.0);
+        ctx.add_quad_curve_to_point(32.0, 19.0, 29.0, 23.0);
+        ctx.stroke_path();
+    }
+}
+
+/// Thick round-capped stroked line — reads as a capsule at either orientation.
+fn capsule(ctx: &mut CGContext, x0: f64, y0: f64, x1: f64, y1: f64, width: f64) {
+    ctx.set_line_width(width);
+    ctx.begin_path();
+    ctx.move_to_point(x0, y0);
+    ctx.add_line_to_point(x1, y1);
+    ctx.stroke_path();
 }
 
 fn disc(ctx: &mut CGContext, x: f64, y: f64, r: f64) {
@@ -106,24 +140,26 @@ fn tick_ring(ctx: &mut CGContext, x: f64, y: f64, r: f64, count: u32, dot: f64) 
     }
 }
 
-/// CGContext rows are bottom-up; tauri Image rows are top-down. Flip while copying.
-fn copy_flipped_rgba(data: &[u8]) -> Vec<u8> {
-    let row = SIZE * 4;
-    let mut out = vec![0u8; data.len()];
-    for y in 0..SIZE {
-        out[y * row..(y + 1) * row].copy_from_slice(&data[(SIZE - 1 - y) * row..(SIZE - y) * row]);
-    }
-    out
+/// Copy the bitmap context's RGBA buffer verbatim. A CGBitmapContext stores
+/// rows top-down (row 0 = image top) even though its coordinate origin is
+/// bottom-left, and tauri Image also wants top-down rows — so no flip. (An
+/// earlier version flipped here; it was harmless for the old vertically
+/// symmetric glyphs but inverted asymmetric ones like the microphone.)
+fn copy_rgba(data: &[u8]) -> Vec<u8> {
+    data.to_vec()
 }
 
 /// NSStatusItem mutations must happen on the main thread; flow calls these
 /// from tokio workers, so hop explicitly. Off-main set_icon silently removes
-/// the status item (observed: tray vanishes after the first cycle).
+/// the status item (observed: tray vanishes after the first cycle). Use
+/// `set_icon_with_as_template(..., true)`: plain `set_icon` hardcodes the
+/// template flag to false on macOS, re-rendering the glyph as a non-tinted
+/// black icon that is invisible on dark menu bars.
 pub fn set_phase(app: &AppHandle, phase: PhaseWire) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(tray) = handle.tray_by_id(TRAY_ID) {
-            let _ = tray.set_icon(Some(icon_for(phase)));
+            let _ = tray.set_icon_with_as_template(Some(icon_for(phase)), true);
             let _ = tray.set_tooltip(Some(phase.tooltip()));
         }
     });
